@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: 检出代码
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: 安装ARM64交叉编译器
       run: |
@@ -44,7 +44,7 @@ jobs:
         timeout 10s ./bin/uiee_engine_arm64 --test || echo "测试完成"
         
     - name: 上传产物
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: uiee_engine_arm64
         path: bin/uiee_engine_arm64
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: 检出代码
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: 设置Android NDK
       uses: nttld/setup-ndk@v1
@@ -92,7 +92,7 @@ jobs:
         file bin/uiee_engine_android
         
     - name: 上传产物
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: uiee_engine_android
         path: bin/uiee_engine_android
