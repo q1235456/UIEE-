@@ -27,7 +27,7 @@ jobs:
       run: |
         mkdir -p build
         
-    - name: 编译main.cpp（带条件编译保护）
+    - name: 编译main.cpp
       run: |
         aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -D_GNU_SOURCE -I./include -c ./bin/main.cpp -o build/main.o
         
@@ -37,7 +37,7 @@ jobs:
         
     - name: 链接可执行文件
       run: |
-        aarch64-linux-gnu-g++ build/main.o build/uiee_engine.o -o bin/uiee_engine_arm64 -lpthread -static-libstdc++
+        aarch64-linux-gnu-g++ build/main.o build/uiee_engine.o -o bin/uiee_engine_arm64 -lpthread
         
     - name: 剥离调试信息
       run: |
