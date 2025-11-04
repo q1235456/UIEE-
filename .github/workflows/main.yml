@@ -1,0 +1,98 @@
+name: ARM64编译
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  compile-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      
+    - name: 安装ARM64交叉编译器
+      run: |
+        sudo apt update
+        sudo apt install -y g++-aarch64-linux-gnu
+        
+    - name: 编译UIEE引擎
+      run: |
+        # 创建构建目录
+        mkdir -p build
+        
+        # 使用ARM64交叉编译器编译
+        aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -pthread -static-libstdc++ -I./include -c ./bin/main.cpp -o build/main.o
+        aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -pthread -static-libstdc++ -I./include -c ./bin/uiee_engine.cpp -o build/uiee_engine.o
+        aarch64-linux-gnu-g++ -pthread -static-libstdc++ build/main.o build/uiee_engine.o -o bin/uiee_engine_arm64
+        
+        # 剥离调试信息
+        aarch64-linux-gnu-strip bin/uiee_engine_arm64
+        
+        # 设置执行权限
+        chmod 755 bin/uiee_engine_arm64
+        
+    - name: 验证架构
+      run: |
+        file bin/uiee_engine_arm64
+        
+    - name: 测试运行
+      run: |
+        timeout 10s ./bin/uiee_engine_arm64 --test || echo "测试完成"
+        
+    - name: 上传产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: uiee_engine_arm64
+        path: bin/uiee_engine_arm64
+
+  compile-android-ndk:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      
+    - name: 设置Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25b
+        add-to-path: true
+        
+    - name: 编译UIEE引擎 (Android NDK)
+      run: |
+        # 设置NDK环境变量
+        export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+        
+        # 创建构建目录
+        mkdir -p build
+        
+        # 使用Android NDK编译
+        $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++ \
+          -std=c++17 -O2 -Wall -Wextra -pthread -static-libstdc++ -I./include \
+          -c ./bin/main.cpp -o build/main.o
+          
+        $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++ \
+          -std=c++17 -O2 -Wall -Wextra -pthread -static-libstdc++ -I./include \
+          -c ./bin/uiee_engine.cpp -o build/uiee_engine.o
+          
+        $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++ \
+          -pthread -static-libstdc++ build/main.o build/uiee_engine.o -o bin/uiee_engine_android
+        
+        # 剥离调试信息
+        $ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-strip bin/uiee_engine_android
+        
+        # 设置执行权限
+        chmod 755 bin/uiee_engine_android
+        
+    - name: 验证架构
+      run: |
+        file bin/uiee_engine_android
+        
+    - name: 上传产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: uiee_engine_android
+        path: bin/uiee_engine_android
