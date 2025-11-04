@@ -8,6 +8,157 @@
 #include <cstring>
 #include <sys/resource.h>
 
+// 线程池管理器实现
+class UIEECoreEngine::ThreadPoolManager::Impl {
+public:
+    Impl(size_t num_threads) : shutdown_(false) {
+        // 简化实现，实际项目中需要完整的线程池实现
+    }
+    
+    ~Impl() {
+        shutdown();
+    }
+    
+    void shutdown() {
+        shutdown_ = true;
+    }
+    
+    bool isShutdown() const {
+        return shutdown_;
+    }
+    
+    size_t getActiveTasks() const {
+        return 0; // 简化实现
+    }
+    
+    size_t getTotalTasks() const {
+        return 0; // 简化实现
+    }
+    
+private:
+    std::atomic<bool> shutdown_;
+};
+
+UIEECoreEngine::ThreadPoolManager::ThreadPoolManager(size_t num_threads) 
+    : impl_(std::make_unique<Impl>(num_threads)) {}
+
+UIEECoreEngine::ThreadPoolManager::~ThreadPoolManager() = default;
+
+template<typename Func, typename... Args>
+auto UIEECoreEngine::ThreadPoolManager::submitTask(Func&& func, Args&&... args) 
+    -> std::future<typename std::invoke_result<Func, Args...>::type> {
+    // 简化实现，实际项目中需要完整的线程池实现
+    using ReturnType = typename std::invoke_result<Func, Args...>::type;
+    std::packaged_task<ReturnType()> task(std::bind(std::forward<Func>(func), std::forward<Args>(args)...));
+    auto future = task.get_future();
+    task();
+    return future;
+}
+
+template<typename Func>
+auto UIEECoreEngine::ThreadPoolManager::submitBatchTasks(const std::vector<Func>& funcs) 
+    -> std::vector<std::future<typename std::invoke_result<Func>::type>> {
+    // 简化实现
+    std::vector<std::future<typename std::invoke_result<Func>::type>> futures;
+    return futures;
+}
+
+void UIEECoreEngine::ThreadPoolManager::shutdown() {
+    if (impl_) impl_->shutdown();
+}
+
+bool UIEECoreEngine::ThreadPoolManager::isShutdown() const {
+    return impl_ ? impl_->isShutdown() : true;
+}
+
+size_t UIEECoreEngine::ThreadPoolManager::getActiveTasks() const {
+    return impl_ ? impl_->getActiveTasks() : 0;
+}
+
+size_t UIEECoreEngine::ThreadPoolManager::getTotalTasks() const {
+    return impl_ ? impl_->getTotalTasks() : 0;
+}
+
+// 内存池管理器实现
+class UIEECoreEngine::MemoryPoolManager::Impl {
+public:
+    Impl(size_t block_size, size_t max_blocks) 
+        : block_size_(block_size), max_blocks_(max_blocks), total_allocated_(0), peak_usage_(0), active_blocks_(0) {}
+    
+    ~Impl() = default;
+    
+    void* allocate(size_t size) {
+        void* ptr = std::malloc(size);
+        if (ptr) {
+            total_allocated_ += size;
+            active_blocks_++;
+            peak_usage_ = std::max(peak_usage_, total_allocated_);
+        }
+        return ptr;
+    }
+    
+    void deallocate(void* ptr) {
+        if (ptr) {
+            std::free(ptr);
+            active_blocks_ = active_blocks_ > 0 ? active_blocks_ - 1 : 0;
+        }
+    }
+    
+    size_t getTotalAllocated() const {
+        return total_allocated_;
+    }
+    
+    size_t getPeakUsage() const {
+        return peak_usage_;
+    }
+    
+    size_t getActiveBlocks() const {
+        return active_blocks_;
+    }
+    
+    void resetStats() {
+        total_allocated_ = 0;
+        peak_usage_ = 0;
+        active_blocks_ = 0;
+    }
+    
+private:
+    size_t block_size_;
+    size_t max_blocks_;
+    size_t total_allocated_;
+    size_t peak_usage_;
+    size_t active_blocks_;
+};
+
+UIEECoreEngine::MemoryPoolManager::MemoryPoolManager(size_t block_size, size_t max_blocks) 
+    : impl_(std::make_unique<Impl>(block_size, max_blocks)) {}
+
+UIEECoreEngine::MemoryPoolManager::~MemoryPoolManager() = default;
+
+void* UIEECoreEngine::MemoryPoolManager::allocate(size_t size) {
+    return impl_ ? impl_->allocate(size) : nullptr;
+}
+
+void UIEECoreEngine::MemoryPoolManager::deallocate(void* ptr) {
+    if (impl_) impl_->deallocate(ptr);
+}
+
+size_t UIEECoreEngine::MemoryPoolManager::getTotalAllocated() const {
+    return impl_ ? impl_->getTotalAllocated() : 0;
+}
+
+size_t UIEECoreEngine::MemoryPoolManager::getPeakUsage() const {
+    return impl_ ? impl_->getPeakUsage() : 0;
+}
+
+size_t UIEECoreEngine::MemoryPoolManager::getActiveBlocks() const {
+    return impl_ ? impl_->getActiveBlocks() : 0;
+}
+
+void UIEECoreEngine::MemoryPoolManager::resetStats() {
+    if (impl_) impl_->resetStats();
+}
+
 // UIEE核心引擎实现
 
 UIEECoreEngine::UIEECoreEngine() 
@@ -513,6 +664,25 @@ void UIEECoreEngine::logError(const std::string& message) {
     }
 }
 
+void UIEECoreEngine::logWarning(const std::string& message) {
+    std::string log_message = "[" + getCurrentTimestamp() + "] [WARNING] " + message;
+    std::cout << log_message << std::endl;
+    
+    // 动态确定日志路径
+    std::string log_dir = "/data/adb/modules/uiee_smart_engine/logs";
+    if (getenv("MODPATH")) {
+        log_dir = std::string(getenv("MODPATH")) + "/logs";
+    }
+    
+    // 写入警告日志文件
+    std::string log_file_path = log_dir + "/warning.log";
+    std::ofstream log_file(log_file_path, std::ios::app);
+    if (log_file.is_open()) {
+        log_file << log_message << std::endl;
+        log_file.close();
+    }
+}
+
 void UIEECoreEngine::logPerformance(const PerformanceMetrics& metrics) {
     std::string log_message = "[" + getCurrentTimestamp() + "] [PERF] CES:" + 
                             std::to_string(metrics.ces_score) + 
@@ -797,6 +967,7 @@ double UIEECoreEngine::getThermalState() {
     return std::max(0.0, std::min(100.0, (temp_celsius - 30.0) / 50.0 * 100.0));
 }
 
+#ifdef __linux__
 std::vector<int> UIEECoreEngine::getRunningPIDs() {
     std::vector<int> pids;
     DIR* dir = opendir("/proc");
@@ -821,6 +992,12 @@ std::vector<int> UIEECoreEngine::getRunningPIDs() {
     closedir(dir);
     return pids;
 }
+#else
+std::vector<int> UIEECoreEngine::getRunningPIDs() {
+    // 非Linux平台返回空列表
+    return std::vector<int>();
+}
+#endif
 
 std::string UIEECoreEngine::getProcessName(int pid) {
     std::string cmdline_path = "/proc/" + std::to_string(pid) + "/cmdline";
@@ -1184,7 +1361,7 @@ void UIEECoreEngine::validateSchedulingResult() {
     
     // 检查CES分数是否改善
     if (metrics.ces_score < 50.0) {
-        logInfo("调度结果不佳，CES分数: " + std::to_string(metrics.ces_score));
+        logWarning("调度结果不佳，CES分数: " + std::to_string(metrics.ces_score));
     } else {
         logInfo("调度结果良好，CES分数: " + std::to_string(metrics.ces_score));
     }
@@ -1648,7 +1825,7 @@ void UIEECoreEngine::monitorPerformance() {
     
     // 性能异常检测
     if (metrics.cpu_usage > 90.0 || metrics.memory_usage > 95.0) {
-        logInfo("检测到高资源使用率: CPU=" + std::to_string(metrics.cpu_usage) + 
+        logWarning("检测到高资源使用率: CPU=" + std::to_string(metrics.cpu_usage) + 
                   "%, 内存=" + std::to_string(metrics.memory_usage) + "%");
         
         // 触发性能优化
