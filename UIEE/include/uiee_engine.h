@@ -17,15 +17,13 @@
 #include <memory>
 #include <future>
 #include <functional>
+#include <type_traits>
 
 // 前向声明
 class HamiltonFitnessFunction;
 class PopulationEvolutionManager;
 class RepeatedPrisonersDilemma;
 class LongTermEvolutionManager;
-class ThreadPoolManager;
-class MemoryPoolManager;
-class PerformanceMonitor;
 
 // UIEE核心引擎类
 class UIEECoreEngine {
@@ -136,42 +134,6 @@ public:
             performance_threshold(0.1) {}
     };
     
-    std::unique_ptr<PerformanceMonitor> performance_monitor_;
-    PerformanceOptimizationConfig optimization_config_;
-    std::unique_ptr<ThreadPoolManager> thread_pool_;
-    std::unique_ptr<MemoryPoolManager> memory_pool_;
-    
-    // 性能优化方法
-    void initializePerformanceOptimization();
-    void updateAdaptiveSampling();
-    void optimizeMemoryUsage();
-    void monitorPerformance();
-    double getCurrentSamplingInterval() const;
-    bool shouldSkipCalculation() const;
-    
-    // 性能优化：适应度缓存
-    struct FitnessCache {
-        PerformanceMetrics metrics;
-        double cached_fitness;
-        std::chrono::steady_clock::time_point cache_time;
-        bool is_valid;
-        size_t hash_value;  // 指标哈希值，用于快速比较
-        
-        FitnessCache() : cached_fitness(0.0), is_valid(false), hash_value(0) {}
-        
-        size_t calculateHash() const {
-            // 简单的哈希计算，用于快速比较指标变化
-            size_t hash = 1469598103934665603ULL; // FNV-1a 初始值
-            const char* data = reinterpret_cast<const char*>(&metrics);
-            for (size_t i = 0; i < sizeof(PerformanceMetrics); ++i) {
-                hash ^= data[i];
-                hash *= 1099511628211ULL;
-            }
-            return hash;
-        }
-    };
-    
-    // 性能监控器
     struct PerformanceMonitor {
         std::chrono::steady_clock::time_point last_check_time;
         double cpu_usage_samples[10];  // CPU使用率历史样本
@@ -212,43 +174,8 @@ public:
         }
     };
     
-    // 适应度个体 - 表示一个调度策略（性能优化版）
-    struct FitnessIndividual {
-        std::vector<double> parameters;  // 调度参数
-        double fitness_score;            // 适应度分数
-        double performance_score;        // 性能分数
-        double efficiency_score;         // 效率分数
-        double energy_cost;              // 能量代价
-        std::chrono::steady_clock::time_point creation_time;
-        std::chrono::steady_clock::time_point last_update_time;
-        int generation;                  // 所属代数
-        bool is_valid;                   // 是否有效
-        int update_count;                // 更新次数（用于自适应调整）
-        
-        FitnessIndividual() : fitness_score(0.0), performance_score(0.0), 
-                             efficiency_score(0.0), energy_cost(0.0), 
-                             generation(0), is_valid(true), update_count(0) {}
-    };
-    
-    // 自适应采样配置
-    struct AdaptiveSamplingConfig {
-        double base_sampling_interval;   // 基础采样间隔（秒）
-        double min_sampling_interval;    // 最小采样间隔
-        double max_sampling_interval;    // 最大采样间隔
-        double cpu_threshold_high;       // CPU高负载阈值
-        double cpu_threshold_low;        // CPU低负载阈值
-        double memory_threshold_high;    // 内存高负载阈值
-        double memory_threshold_low;     // 内存低负载阈值
-        int adaptation_window;           // 自适应窗口大小
-        
-        AdaptiveSamplingConfig() : 
-            base_sampling_interval(30.0), min_sampling_interval(5.0), 
-            max_sampling_interval(120.0), cpu_threshold_high(80.0), 
-            cpu_threshold_low(20.0), memory_threshold_high(85.0), 
-            memory_threshold_low(30.0), adaptation_window(10) {}
-    };
-    
-    AdaptiveSamplingConfig adaptive_config_;
+    std::unique_ptr<PerformanceMonitor> performance_monitor_;
+    PerformanceOptimizationConfig optimization_config_;
     
     // 线程池管理器（性能优化）
     class ThreadPoolManager {
@@ -259,12 +186,12 @@ public:
         // 任务提交
         template<typename Func, typename... Args>
         auto submitTask(Func&& func, Args&&... args) 
-            -> std::future<typename std::result_of<Func(Args...)>::type>;
+            -> std::future<typename std::invoke_result<Func, Args...>::type>;
         
         // 批量任务提交
         template<typename Func>
         auto submitBatchTasks(const std::vector<Func>& funcs) 
-            -> std::vector<std::future<typename std::result_of<Func()>::type>>;
+            -> std::vector<std::future<typename std::invoke_result<Func>::type>>;
         
         // 线程池控制
         void shutdown();
@@ -298,8 +225,68 @@ public:
         std::unique_ptr<Impl> impl_;
     };
     
-    // 性能优化配置
-    // (已在上面定义)
+    std::unique_ptr<ThreadPoolManager> thread_pool_;
+    std::unique_ptr<MemoryPoolManager> memory_pool_;
+    
+    // 性能优化：适应度缓存
+    struct FitnessCache {
+        PerformanceMetrics metrics;
+        double cached_fitness;
+        std::chrono::steady_clock::time_point cache_time;
+        bool is_valid;
+        size_t hash_value;  // 指标哈希值，用于快速比较
+        
+        FitnessCache() : cached_fitness(0.0), is_valid(false), hash_value(0) {}
+        
+        size_t calculateHash() const {
+            // 简单的哈希计算，用于快速比较指标变化
+            size_t hash = 1469598103934665603ULL; // FNV-1a 初始值
+            const char* data = reinterpret_cast<const char*>(&metrics);
+            for (size_t i = 0; i < sizeof(PerformanceMetrics); ++i) {
+                hash ^= data[i];
+                hash *= 1099511628211ULL;
+            }
+            return hash;
+        }
+    };
+    
+    // 自适应采样配置
+    struct AdaptiveSamplingConfig {
+        double base_sampling_interval;   // 基础采样间隔（秒）
+        double min_sampling_interval;    // 最小采样间隔
+        double max_sampling_interval;    // 最大采样间隔
+        double cpu_threshold_high;       // CPU高负载阈值
+        double cpu_threshold_low;        // CPU低负载阈值
+        double memory_threshold_high;    // 内存高负载阈值
+        double memory_threshold_low;     // 内存低负载阈值
+        int adaptation_window;           // 自适应窗口大小
+        
+        AdaptiveSamplingConfig() : 
+            base_sampling_interval(30.0), min_sampling_interval(5.0), 
+            max_sampling_interval(120.0), cpu_threshold_high(80.0), 
+            cpu_threshold_low(20.0), memory_threshold_high(85.0), 
+            memory_threshold_low(30.0), adaptation_window(10) {}
+    };
+    
+    AdaptiveSamplingConfig adaptive_config_;
+    
+    // 适应度个体 - 表示一个调度策略（性能优化版）
+    struct FitnessIndividual {
+        std::vector<double> parameters;  // 调度参数
+        double fitness_score;            // 适应度分数
+        double performance_score;        // 性能分数
+        double efficiency_score;         // 效率分数
+        double energy_cost;              // 能量代价
+        std::chrono::steady_clock::time_point creation_time;
+        std::chrono::steady_clock::time_point last_update_time;
+        int generation;                  // 所属代数
+        bool is_valid;                   // 是否有效
+        int update_count;                // 更新次数（用于自适应调整）
+        
+        FitnessIndividual() : fitness_score(0.0), performance_score(0.0), 
+                             efficiency_score(0.0), energy_cost(0.0), 
+                             generation(0), is_valid(true), update_count(0) {}
+    };
     
     // Hamilton适应度函数（性能优化版）
     class HamiltonFitnessFunction {
@@ -509,6 +496,7 @@ public:
     // 日志管理
     void logInfo(const std::string& message);
     void logError(const std::string& message);
+    void logWarning(const std::string& message);
     void logPerformance(const PerformanceMetrics& metrics);
     void logEvolutionaryData(const EvolutionHistory& history);
     
@@ -516,6 +504,14 @@ public:
     std::string getWebUIStatus();
     void updateWebUIConfig(const std::string& json_config);
     std::string getEvolutionaryWebUIStatus();
+    
+    // 性能优化方法
+    void initializePerformanceOptimization();
+    void updateAdaptiveSampling();
+    void optimizeMemoryUsage();
+    void monitorPerformance();
+    double getCurrentSamplingInterval() const;
+    bool shouldSkipCalculation() const;
     
 private:
     // 内部成员
@@ -619,9 +615,6 @@ private:
     void updateEvolutionaryPerformance();
     
     // ========== 性能优化私有方法 ==========
-    
-    // 性能优化核心方法
-    // (已在上面定义)
     
     // 优化版本的方法
     double evaluateIndividualFitnessOptimized(FitnessIndividual& individual);
