@@ -15,6 +15,17 @@
 #include <cmath>
 #include <random>
 #include <memory>
+#include <future>
+#include <functional>
+
+// 前向声明
+class HamiltonFitnessFunction;
+class PopulationEvolutionManager;
+class RepeatedPrisonersDilemma;
+class LongTermEvolutionManager;
+class ThreadPoolManager;
+class MemoryPoolManager;
+class PerformanceMonitor;
 
 // UIEE核心引擎类
 class UIEECoreEngine {
@@ -106,8 +117,26 @@ public:
     // ========== Hamilton适应度理论落地实现 ==========
     
     // 性能优化相关成员变量
+    struct PerformanceOptimizationConfig {
+        bool enable_cache;
+        bool enable_adaptive_sampling;
+        bool enable_thread_pool;
+        bool enable_memory_pool;
+        bool enable_performance_monitoring;
+        size_t cache_size;
+        size_t thread_pool_size;
+        size_t memory_pool_block_size;
+        double performance_threshold;
+        
+        PerformanceOptimizationConfig() :
+            enable_cache(true), enable_adaptive_sampling(true),
+            enable_thread_pool(true), enable_memory_pool(true),
+            enable_performance_monitoring(true), cache_size(100),
+            thread_pool_size(4), memory_pool_block_size(1024),
+            performance_threshold(0.1) {}
+    };
+    
     std::unique_ptr<PerformanceMonitor> performance_monitor_;
-    AdaptiveSamplingConfig adaptive_config_;
     PerformanceOptimizationConfig optimization_config_;
     std::unique_ptr<ThreadPoolManager> thread_pool_;
     std::unique_ptr<MemoryPoolManager> memory_pool_;
@@ -119,13 +148,6 @@ public:
     void monitorPerformance();
     double getCurrentSamplingInterval() const;
     bool shouldSkipCalculation() const;
-    
-    // 性能优化相关公共接口
-    void enablePerformanceOptimization(const PerformanceOptimizationConfig& config);
-    void disablePerformanceOptimization();
-    PerformanceOptimizationConfig getOptimizationConfig() const;
-    void resetPerformanceStats();
-    std::string getPerformanceReport() const;
     
     // 性能优化：适应度缓存
     struct FitnessCache {
@@ -226,6 +248,8 @@ public:
             memory_threshold_low(30.0), adaptation_window(10) {}
     };
     
+    AdaptiveSamplingConfig adaptive_config_;
+    
     // 线程池管理器（性能优化）
     class ThreadPoolManager {
     public:
@@ -238,9 +262,9 @@ public:
             -> std::future<typename std::result_of<Func(Args...)>::type>;
         
         // 批量任务提交
-        template<typename Func, typename... Args>
-        auto submitBatchTasks(std::vector<Func> funcs, Args&&... args) 
-            -> std::vector<std::future<typename std::result_of<Func(Args...)>::type>>;
+        template<typename Func>
+        auto submitBatchTasks(const std::vector<Func>& funcs) 
+            -> std::vector<std::future<typename std::result_of<Func()>::type>>;
         
         // 线程池控制
         void shutdown();
@@ -275,24 +299,7 @@ public:
     };
     
     // 性能优化配置
-    struct PerformanceOptimizationConfig {
-        bool enable_cache;
-        bool enable_adaptive_sampling;
-        bool enable_thread_pool;
-        bool enable_memory_pool;
-        bool enable_performance_monitoring;
-        size_t cache_size;
-        size_t thread_pool_size;
-        size_t memory_pool_block_size;
-        double performance_threshold;
-        
-        PerformanceOptimizationConfig() :
-            enable_cache(true), enable_adaptive_sampling(true),
-            enable_thread_pool(true), enable_memory_pool(true),
-            enable_performance_monitoring(true), cache_size(100),
-            thread_pool_size(4), memory_pool_block_size(1024),
-            performance_threshold(0.1) {}
-    };
+    // (已在上面定义)
     
     // Hamilton适应度函数（性能优化版）
     class HamiltonFitnessFunction {
@@ -614,12 +621,7 @@ private:
     // ========== 性能优化私有方法 ==========
     
     // 性能优化核心方法
-    void initializePerformanceOptimization();
-    void updateAdaptiveSampling();
-    void optimizeMemoryUsage();
-    void monitorPerformance();
-    double getCurrentSamplingInterval() const;
-    bool shouldSkipCalculation() const;
+    // (已在上面定义)
     
     // 优化版本的方法
     double evaluateIndividualFitnessOptimized(FitnessIndividual& individual);
@@ -645,31 +647,8 @@ private:
     bool setProcessPriority(int pid, int priority);
     bool setCPUAffinity(int pid, const std::vector<int>& cores);
     
-    // ========== Hamilton理论成员变量 ==========
-    
-    // 适应度理论组件
-    std::shared_ptr<HamiltonFitnessFunction> hamilton_fitness_;
-    std::shared_ptr<PopulationEvolutionManager> population_manager_;
-    
-    // 连续囚徒困境组件
-    std::shared_ptr<RepeatedPrisonersDilemma> game_manager_;
-    std::atomic<bool> game_running_;
-    
-    // 长期进化组件
-    std::shared_ptr<LongTermEvolutionManager> evolution_manager_;
-    std::atomic<bool> evolution_active_;
-    
-    // 进化参数
-    struct EvolutionConfig {
-        double alpha_weight = 0.4;      // 性能权重
-        double beta_weight = 0.3;       // 效率权重
-        double gamma_weight = 0.3;      // 代价权重
-        size_t population_size = 50;    // 种群大小
-        int max_generations = 1000;     // 最大代数
-        double mutation_rate = 0.1;     // 变异率
-        double crossover_rate = 0.8;    // 交叉率
-        double convergence_threshold = 1e-6; // 收敛阈值
-    } evolution_config_;
+    // 辅助方法
+    double calculatePopulationDiversity(const std::vector<FitnessIndividual>& population);
 };
 
 #endif // UIEE_ENGINE_H
