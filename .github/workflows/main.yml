@@ -17,7 +17,7 @@ jobs:
     - name: 安装ARM64交叉编译器
       run: |
         sudo apt update
-        sudo apt install -y g++-aarch64-linux-gnu
+        sudo apt install -y g++-aarch64-linux-gnu build-essential
         
     - name: 显示编译器版本
       run: |
@@ -29,15 +29,15 @@ jobs:
         
     - name: 编译main.cpp
       run: |
-        aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -D_GNU_SOURCE -I./include -c ./bin/main.cpp -o build/main.o
+        aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -D_GNU_SOURCE -D_LINUX -I./include -c ./bin/main.cpp -o build/main.o
         
     - name: 编译uiee_engine.cpp
       run: |
-        aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -D_GNU_SOURCE -I./include -c ./bin/uiee_engine.cpp -o build/uiee_engine.o
+        aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -D_GNU_SOURCE -D_LINUX -I./include -c ./bin/uiee_engine.cpp -o build/uiee_engine.o
         
     - name: 链接可执行文件
       run: |
-        aarch64-linux-gnu-g++ build/main.o build/uiee_engine.o -o bin/uiee_engine_arm64 -lpthread
+        aarch64-linux-gnu-g++ build/main.o build/uiee_engine.o -o bin/uiee_engine_arm64 -lpthread -static-libstdc++
         
     - name: 剥离调试信息
       run: |
