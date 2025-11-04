@@ -171,8 +171,10 @@ void runStatus() {
 
 int main(int argc, char* argv[]) {
     // 设置信号处理
+#ifdef __linux__
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
+#endif
     
     // 解析命令行参数
     std::string config_path;
@@ -222,6 +224,7 @@ int main(int argc, char* argv[]) {
     
     // 守护进程模式
     if (daemon_mode) {
+#ifdef __linux__
         // 创建守护进程
         pid_t pid = fork();
         if (pid < 0) {
@@ -240,6 +243,9 @@ int main(int argc, char* argv[]) {
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
+#else
+        std::cout << "守护进程模式仅在Linux系统上支持" << std::endl;
+#endif
     }
     
     // 创建引擎实例
